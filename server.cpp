@@ -244,7 +244,6 @@ void startGame(){
     sprintf(buf, "%c", letter);
     strcat(msg, buf);
     strcat(msg, "\n");
-    std::cout<<msg<<std::endl;
 
     sendToAllActive(msg, strlen(msg));
     gameStarted = true;

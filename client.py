@@ -43,7 +43,6 @@ class Client:
         while True:
             for i in range(len(self.fullbuf)):
                 if self.fullbuf[i] == '\n':
-                    print("Handling: " + self.fullbuf[:i])
                     handleMsg(self.fullbuf[:i])
                     self.fullbuf = self.fullbuf[i + 1:]
                     break
