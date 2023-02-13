@@ -89,7 +89,7 @@ class App(tk.Tk):
 
     def sendNickname(self, entry):
         nickname = entry.get()
-        client.send_msg('N' + nickname)
+        client.send_msg('N' + nickname + '\n')
 
     def changeNicknameLabel(self):
         self.frames['NicknameFrame'].error_label.config(text='Podany nick już istnieje')
@@ -113,7 +113,7 @@ class App(tk.Tk):
         city = city_entry.get()
         name = name_entry.get()
         self.frames['GameFrame'].button["state"] = "disabled"
-        client.send_msg('A' + country + ";" + city + ";" + name)
+        client.send_msg('A' + country + ";" + city + ";" + name + '\n')
 
 
 class NicknameFrame(tk.Frame):

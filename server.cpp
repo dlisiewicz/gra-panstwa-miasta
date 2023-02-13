@@ -31,6 +31,7 @@ int activeInGame = 0;
 int gameSeconds = 0;
 char letter;
 
+
 void ctrl_c(int);
 
 void sendToAllBut(int fd, char * buffer, int count);
@@ -45,6 +46,7 @@ void startGame();
 void sendList();
 bool checkIfStop();
 void gameTimer();
+void fBuf();
 
 uint16_t readPort(char * txt);
 void setReuseAddr(int sock);
@@ -82,6 +84,7 @@ public:
     float points;
     bool active;
     bool answered;
+    std::string fb;
     Client(int fd) : _fd(fd) {
         epoll_event ee {EPOLLIN|EPOLLRDHUP, {.ptr=this}};
         epoll_ctl(epollFd, EPOLL_CTL_ADD, _fd, &ee);
@@ -90,6 +93,7 @@ public:
         answered = false;
         answer = nullptr;
         nickname = nullptr;
+        fb ="";
     }
     virtual ~Client(){
         epoll_ctl(epollFd, EPOLL_CTL_DEL, _fd, nullptr);
@@ -101,40 +105,9 @@ public:
         if(events & EPOLLIN) {
             char buffer[256];
             bzero(buffer, 256);
-            char msg[256];
             ssize_t count = read(_fd, buffer, 256);
             if(count > 0){
-                if(buffer[0]=='N'){
-                    if(checkNickname(_fd, removeFirst(buffer))){
-                        this->nickname=removeFirst(buffer);
-                        strcpy(msg, "valid\n");
-                        sendToOne(_fd, msg, strlen(msg));
-                        this->active = true;
-                        sendList();
-
-                        if(!gameStarted){
-                            if(countActive()>1){
-                                startGame();
-                            }
-                        }
-                    }
-                    else{
-                        strcpy(msg, "invalid\n");
-                        sendToOne(_fd, msg, strlen(msg));
-                    }
-                }
-                if(buffer[0]=='A'){
-                    this->answer=removeFirst(buffer);
-                    this->answered=true;
-                    sendList();
-                    if(checkIfStop()){
-                        checkAnswers();
-                        startGame();
-                        sendList();
-                    }
-                }
-
-
+                this->fb+=buffer;
             }
 
             else
@@ -148,8 +121,6 @@ public:
         if(count != ::write(_fd, buffer, count)){
             remove();
         }
-
-        
     }
     void remove() {
         printf("removing %d\n", _fd);
@@ -159,6 +130,7 @@ public:
         if(countActive()<2){
             gameStarted = false;
         }
+        sendList();
     }
 
 };
@@ -214,6 +186,7 @@ int main(int argc, char ** argv){
     epoll_ctl(epollFd, EPOLL_CTL_ADD, servFd, &ee);
     
     std::thread t(gameTimer);
+    std::thread t1(fBuf);
 
     while(true){
         if(-1 == epoll_wait(epollFd, &ee, 1, -1)) {
@@ -221,6 +194,63 @@ int main(int argc, char ** argv){
             ctrl_c(SIGINT);
         }
         ((Handler*)ee.data.ptr)->handleEvent(ee.events);
+    }
+}
+void fBuf(){
+    char buf[256];
+    char msg[256];
+    bzero(buf, 256);
+    bzero(msg, 256);
+
+    while(1){
+        auto it = clients.begin();
+        while(it!=clients.end()){
+            Client * client = *it;
+            it++;
+            if(client->fb.size()>0){
+                for(int i=0; i<int(client->fb.size()); i++){
+                    if(client->fb[i]!='\n'){
+                        sprintf(buf, "%c", client->fb[i]);
+                        strcat(msg, buf);
+                    }
+                    else if(client->fb[i]=='\n'){
+                        if(msg[0]=='N'){
+                            if(checkNickname(client->fd(), removeFirst(msg))){
+                                client->nickname=removeFirst(msg);
+                                strcpy(buf, "valid\n");
+                                sendToOne(client->fd(), buf, strlen(buf));
+                                client->active = true;
+                                sendList();
+
+                                if(!gameStarted){
+                                    if(countActive()>1){
+                                        startGame();
+                                    }
+                                }
+                            }
+                            else{
+                                strcpy(buf, "invalid\n");
+                                sendToOne(client->fd(), buf, strlen(buf));
+                            }
+                        }
+                        if(msg[0]=='A'){
+                            client->answer=removeFirst(msg);
+                            client->answered=true;
+                            sendList();
+                            if(checkIfStop()){
+                                checkAnswers();
+                                startGame();
+                                sendList();
+                            }
+                        }
+                        client->fb.erase(0, i+1);
+                        bzero(msg, 256);
+                    }
+
+                }
+            }
+            bzero(msg, 256);
+        }
     }
 }
 void startGame(){
@@ -415,9 +445,6 @@ void checkAnswers(){
                 if(answerCountName.size()>1 && answerCountName[answers[2]]==1) client->points+=10;
                 if(answerCountName[answers[2]]>1) client->points+=5;
             }
-
-
-
 
             answers.clear();
         }
